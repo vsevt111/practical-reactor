@@ -3,6 +3,7 @@ import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
+import java.util.function.*;
 
 /**
  * Another way of controlling amount of data flowing is batching.
@@ -29,9 +30,10 @@ public class c11_Batching extends BatchingBase {
     @Test
     public void batch_writer() {
         //todo do your changes here
-        Flux<Void> dataStream = null;
+        Flux<Void> dataStream = dataStream().buffer(10)
+                .flatMap(this::writeToDisk);
         dataStream();
-        writeToDisk(null);
+        //writeToDisk(null);
 
         //do not change the code below
         StepVerifier.create(dataStream)
@@ -50,9 +52,12 @@ public class c11_Batching extends BatchingBase {
     @Test
     public void command_gateway() {
         //todo: implement your changes here
-        Flux<Void> processCommands = null;
+        Flux<Void> processCommands = inputCommandStream()
+                .groupBy(Command::getAggregateId)
+                .flatMap(stringCommandGroupedFlux -> stringCommandGroupedFlux.flatMap(this::sendCommand))
+                ;
         inputCommandStream();
-        sendCommand(null);
+        //sendCommand(null);
 
         //do not change the code below
         Duration duration = StepVerifier.create(processCommands)
@@ -70,6 +75,8 @@ public class c11_Batching extends BatchingBase {
     public void sum_over_time() {
         Flux<Long> metrics = metrics()
                 //todo: implement your changes here
+                .window(Duration.ofSeconds(1))
+                .flatMapSequential(longFlux -> longFlux.reduce((aLong, aLong2) -> aLong+aLong2))
                 .take(10);
 
         StepVerifier.create(metrics)

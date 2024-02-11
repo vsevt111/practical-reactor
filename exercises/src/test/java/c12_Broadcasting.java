@@ -1,5 +1,5 @@
 import org.junit.jupiter.api.*;
-import reactor.core.publisher.Flux;
+import reactor.core.publisher.*;
 import reactor.test.StepVerifier;
 
 import java.util.Arrays;
@@ -33,6 +33,7 @@ public class c12_Broadcasting extends BroadcastingBase {
     public void sharing_is_caring() throws InterruptedException {
         Flux<Message> messages = messageStream()
                 //todo: do your changes here
+                .publish().autoConnect(2)
                 ;
 
         //don't change code below
@@ -61,6 +62,7 @@ public class c12_Broadcasting extends BroadcastingBase {
     public void hot_vs_cold() {
         Flux<String> updates = systemUpdates()
                 //todo: do your changes here
+                .publish().autoConnect(1)
                 ;
 
         //subscriber 1
@@ -83,6 +85,7 @@ public class c12_Broadcasting extends BroadcastingBase {
     public void history_lesson() {
         Flux<String> updates = systemUpdates()
                 //todo: do your changes here
+
                 ;
 
         //subscriber 1

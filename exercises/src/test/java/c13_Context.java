@@ -1,8 +1,9 @@
 import org.junit.jupiter.api.*;
+import reactor.core.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import reactor.util.context.Context;
+import reactor.util.context.*;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,7 +33,8 @@ public class c13_Context extends ContextBase {
      */
     public Mono<Message> messageHandler(String payload) {
         //todo: do your changes withing this method
-        return Mono.just(new Message("set correlation_id from context here", payload));
+        return Mono.just(new Message("set correlation_id from context here", payload))
+                .transformDeferredContextual((messageMono, contextView) -> messageMono.map(message -> new Message(contextView.get(HTTP_CORRELATION_ID),message.payload)));
     }
 
     @Test
@@ -52,11 +54,12 @@ public class c13_Context extends ContextBase {
      */
     @Test
     public void execution_counter() {
+        AtomicInteger count = new AtomicInteger(0);
         Mono<Void> repeat = Mono.deferContextual(ctx -> {
             ctx.get(AtomicInteger.class).incrementAndGet();
             return openConnection();
-        });
-        //todo: change this line only
+        })
+                .contextWrite(context -> context.put(AtomicInteger.class,count))
         ;
 
         StepVerifier.create(repeat.repeat(4))
@@ -77,12 +80,23 @@ public class c13_Context extends ContextBase {
     @Test
     public void pagination() {
         AtomicInteger pageWithError = new AtomicInteger(); //todo: set this field when error occurs
+        AtomicInteger pageNumber = new AtomicInteger(0);
 
         //todo: start from here
-        Flux<Integer> results = getPage(0)
+        Flux<Integer> results = Mono.deferContextual(contextView -> {
+            int test = contextView.get(AtomicInteger.class).incrementAndGet()-1;
+            try{
+                return getPage(test);
+            }catch (Exception e){
+                pageWithError.set(test);
+                return Mono.empty();
+            }
+        })
                 .flatMapMany(Page::getResult)
                 .repeat(10)
-                .doOnNext(i -> System.out.println("Received: " + i));
+
+                .doOnNext(i -> System.out.println("Received: " + i))
+                .contextWrite(context -> context.put(AtomicInteger.class,pageNumber));
 
 
         //don't change this code

@@ -4,8 +4,7 @@ import org.junit.jupiter.api.*;
 import reactor.blockhound.BlockHound;
 import reactor.core.Exceptions;
 import reactor.core.Scannable;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
+import reactor.core.publisher.*;
 import reactor.core.scheduler.NonBlocking;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
@@ -48,7 +47,7 @@ public class c9_ExecutionControl extends ExecutionControlBase {
         long threadId = Thread.currentThread().getId();
         Flux<String> notifications = readNotifications()
                 .doOnNext(System.out::println)
-                //todo: change this line only
+                .delayElements(Duration.ofSeconds(1))//todo: change this line only
                 ;
 
         StepVerifier.create(notifications
@@ -77,7 +76,9 @@ public class c9_ExecutionControl extends ExecutionControlBase {
     public void ready_set_go() {
         //todo: feel free to change code as you need
         Flux<String> tasks = tasks()
-                .flatMap(Function.identity());
+                .delaySubscription(semaphore())
+                .flatMap(Function.identity())
+                ;
         semaphore();
 
         //don't change code below
@@ -104,7 +105,7 @@ public class c9_ExecutionControl extends ExecutionControlBase {
                                   assert NonBlocking.class.isAssignableFrom(Thread.currentThread().getClass());
                                   System.out.println("Task executing on: " + currentThread.getName());
                               })
-                              //todo: change this line only
+                .subscribeOn(Schedulers.parallel())//todo: change this line only
                               .then();
 
         StepVerifier.create(task)
@@ -121,7 +122,7 @@ public class c9_ExecutionControl extends ExecutionControlBase {
         BlockHound.install(); //don't change this line
 
         Mono<Void> task = Mono.fromRunnable(ExecutionControlBase::blockingCall)
-                              .subscribeOn(Schedulers.single())//todo: change this line only
+                              .subscribeOn(Schedulers.boundedElastic())//todo: change this line only
                               .then();
 
         StepVerifier.create(task)
@@ -137,7 +138,10 @@ public class c9_ExecutionControl extends ExecutionControlBase {
         Mono<Void> task = Mono.fromRunnable(ExecutionControlBase::blockingCall);
 
         Flux<Void> taskQueue = Flux.just(task, task, task)
-                                   .concatMap(Function.identity());
+                .parallel()
+                .runOn(Schedulers.parallel())
+                                   .concatMap(Function.identity())
+                .sequential();
 
         //don't change code below
         Duration duration = StepVerifier.create(taskQueue)
@@ -154,8 +158,9 @@ public class c9_ExecutionControl extends ExecutionControlBase {
     public void sequential_free_runners() {
         //todo: feel free to change code as you need
         Flux<String> tasks = tasks()
-                .flatMap(Function.identity());
-        ;
+                .parallel().sequential()
+                .flatMapSequential(Function.identity());
+
 
         //don't change code below
         Duration duration = StepVerifier.create(tasks)
@@ -176,10 +181,14 @@ public class c9_ExecutionControl extends ExecutionControlBase {
     public void event_processor() {
         //todo: feel free to change code as you need
         Flux<String> eventStream = eventProcessor()
+                .parallel(3)
+                .runOn(Schedulers.parallel())
                 .filter(event -> event.metaData.length() > 0)
                 .doOnNext(event -> System.out.println("Mapping event: " + event.metaData))
                 .map(this::toJson)
-                .concatMap(n -> appendToStore(n).thenReturn(n));
+                .sequential()
+                .concatMap(n -> appendToStore(n).thenReturn(n),5)
+                ;
 
         //don't change code below
         StepVerifier.create(eventStream)
@@ -191,6 +200,7 @@ public class c9_ExecutionControl extends ExecutionControlBase {
                                       .map(Object::toString)
                                       .collect(Collectors.toList());
 
+        System.out.println(steps);
         String last = Scannable.from(eventStream)
                                .steps()
                                .collect(Collectors.toCollection(LinkedList::new))
